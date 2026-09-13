@@ -5,6 +5,7 @@ import '../../../data/product_api_exception.dart';
 import 'catalog_event.dart';
 import 'catalog_load_requested.dart';
 import 'catalog_next_page_requested.dart';
+import 'catalog_query_changed.dart';
 import 'catalog_state.dart';
 
 class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
@@ -12,23 +13,66 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     : super(const CatalogState.initial()) {
     on<CatalogLoadRequested>(_onLoadRequested);
     on<CatalogNextPageRequested>(_onNextPageRequested);
+    on<CatalogQueryChanged>(_onQueryChanged);
   }
 
   final ProductApiClient _apiClient;
+  int _queryRevision = 0;
+  String _query = '';
+  bool _debouncing = false;
+
+  void changeQuery(String input) {
+    if (isClosed) return;
+    final query = input.trim();
+    if (query == _query) return;
+
+    _query = query;
+    _queryRevision++;
+    _debouncing = query.isNotEmpty;
+    add(CatalogQueryChanged(query: query, revision: _queryRevision));
+  }
+
+  Future<void> _onQueryChanged(
+    CatalogQueryChanged event,
+    Emitter<CatalogState> emit,
+  ) async {
+    if (event.revision != _queryRevision) return;
+    emit(CatalogState.loading(query: event.query));
+
+    if (event.query.isNotEmpty) {
+      await Future<void>.delayed(const Duration(milliseconds: 350));
+    }
+    if (emit.isDone || event.revision != _queryRevision) return;
+
+    _debouncing = false;
+    await _loadFirstPage(emit, event.query, event.revision);
+  }
 
   Future<void> _onLoadRequested(
     CatalogLoadRequested event,
     Emitter<CatalogState> emit,
   ) async {
-    if (state.status != CatalogStatus.initial &&
-        state.status != CatalogStatus.failure) {
+    if (_debouncing ||
+        state.query != _query ||
+        (state.status != CatalogStatus.initial &&
+            state.status != CatalogStatus.failure)) {
       return;
     }
 
-    emit(const CatalogState.loading());
+    final revision = _queryRevision;
+    final query = _query;
+    emit(CatalogState.loading(query: query));
+    await _loadFirstPage(emit, query, revision);
+  }
+
+  Future<void> _loadFirstPage(
+    Emitter<CatalogState> emit,
+    String query,
+    int revision,
+  ) async {
     try {
-      final page = await _apiClient.fetchProducts();
-      if (emit.isDone) return;
+      final page = await _apiClient.fetchProducts(query: query);
+      if (emit.isDone || revision != _queryRevision) return;
 
       final seenIds = <int>{};
       final products = page.products
@@ -37,19 +81,21 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
       emit(
         CatalogState.loaded(
           products,
+          query: query,
           nextSkip: page.nextSkip,
           hasMore: page.hasMore,
         ),
       );
     } on ProductApiException catch (error) {
-      if (emit.isDone) return;
-      emit(CatalogState.failure(error.message));
+      if (emit.isDone || revision != _queryRevision) return;
+      emit(CatalogState.failure(error.message, query: query));
     } on Exception catch (error, stackTrace) {
-      if (emit.isDone) return;
+      if (emit.isDone || revision != _queryRevision) return;
       addError(error, stackTrace);
       emit(
-        const CatalogState.failure(
+        CatalogState.failure(
           'Products could not be loaded. Please try again.',
+          query: query,
         ),
       );
     }
@@ -59,7 +105,9 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     CatalogNextPageRequested event,
     Emitter<CatalogState> emit,
   ) async {
-    if (state.status != CatalogStatus.success ||
+    if (_debouncing ||
+        state.query != _query ||
+        state.status != CatalogStatus.success ||
         state.isLoadingMore ||
         !state.hasMore ||
         (state.paginationError != null && !event.retry)) {
@@ -67,10 +115,14 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     }
 
     final previous = state;
+    final revision = _queryRevision;
     emit(CatalogState.pagination(previous, isLoadingMore: true));
     try {
-      final page = await _apiClient.fetchProducts(skip: previous.nextSkip);
-      if (emit.isDone) return;
+      final page = await _apiClient.fetchProducts(
+        skip: previous.nextSkip,
+        query: previous.query,
+      );
+      if (emit.isDone || revision != _queryRevision) return;
 
       if (page.skip != previous.nextSkip) {
         throw const ProductApiException(
@@ -85,15 +137,16 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
       emit(
         CatalogState.loaded(
           products,
+          query: previous.query,
           nextSkip: page.nextSkip,
           hasMore: page.hasMore,
         ),
       );
     } on ProductApiException catch (error) {
-      if (emit.isDone) return;
+      if (emit.isDone || revision != _queryRevision) return;
       emit(CatalogState.pagination(previous, paginationError: error.message));
     } on Exception catch (error, stackTrace) {
-      if (emit.isDone) return;
+      if (emit.isDone || revision != _queryRevision) return;
       addError(error, stackTrace);
       emit(
         CatalogState.pagination(
@@ -103,5 +156,11 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
         ),
       );
     }
+  }
+
+  @override
+  Future<void> close() {
+    _queryRevision++;
+    return super.close();
   }
 }

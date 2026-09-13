@@ -5,6 +5,7 @@ enum CatalogStatus { initial, loading, success, empty, failure }
 class CatalogState {
   const CatalogState.initial()
     : status = CatalogStatus.initial,
+      query = '',
       products = const [],
       errorMessage = null,
       nextSkip = 0,
@@ -12,7 +13,7 @@ class CatalogState {
       isLoadingMore = false,
       paginationError = null;
 
-  const CatalogState.loading()
+  const CatalogState.loading({this.query = ''})
     : status = CatalogStatus.loading,
       products = const [],
       errorMessage = null,
@@ -23,6 +24,7 @@ class CatalogState {
 
   CatalogState.loaded(
     List<Product> products, {
+    required this.query,
     required this.nextSkip,
     required this.hasMore,
   }) : status = products.isEmpty ? CatalogStatus.empty : CatalogStatus.success,
@@ -31,7 +33,7 @@ class CatalogState {
        isLoadingMore = false,
        paginationError = null;
 
-  const CatalogState.failure(String message)
+  const CatalogState.failure(String message, {this.query = ''})
     : status = CatalogStatus.failure,
       products = const [],
       errorMessage = message,
@@ -45,12 +47,14 @@ class CatalogState {
     this.isLoadingMore = false,
     this.paginationError,
   }) : status = previous.status,
+       query = previous.query,
        products = previous.products,
        errorMessage = previous.errorMessage,
        nextSkip = previous.nextSkip,
        hasMore = previous.hasMore;
 
   final CatalogStatus status;
+  final String query;
   final List<Product> products;
   final String? errorMessage;
   final int nextSkip;

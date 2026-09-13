@@ -11,6 +11,7 @@ import 'bloc/catalog_state.dart';
 import 'catalog_loading_card.dart';
 import 'catalog_message.dart';
 import 'catalog_pagination_footer.dart';
+import 'catalog_search_field.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -57,6 +58,15 @@ class _CatalogScreenState extends State<CatalogScreen> {
     });
   }
 
+  void _changeQuery(String input) {
+    final bloc = context.read<CatalogBloc>();
+    final changed = input.trim() != bloc.state.query;
+    bloc.changeQuery(input);
+    if (changed && _scrollController.hasClients) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,11 +100,18 @@ class _CatalogScreenState extends State<CatalogScreen> {
                         state.status == CatalogStatus.initial ||
                         state.status == CatalogStatus.loading;
                     final message = switch (state.status) {
-                      CatalogStatus.initial ||
-                      CatalogStatus.loading => 'Loading products…',
+                      CatalogStatus.initial || CatalogStatus.loading =>
+                        state.query.isEmpty
+                            ? 'Loading products…'
+                            : 'Searching for “${state.query}”…',
                       CatalogStatus.success =>
-                        '${state.products.length} products loaded',
-                      CatalogStatus.empty => 'No products found',
+                        state.query.isEmpty
+                            ? '${state.products.length} products loaded'
+                            : '${state.products.length} results for “${state.query}”',
+                      CatalogStatus.empty =>
+                        state.query.isEmpty
+                            ? 'No products found'
+                            : 'No results for “${state.query}”',
                       CatalogStatus.failure => 'Could not load products',
                     };
 
@@ -105,6 +122,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                       },
                       child: CustomScrollView(
                         controller: _scrollController,
+                        keyboardDismissBehavior:
+                            ScrollViewKeyboardDismissBehavior.onDrag,
                         slivers: [
                           SliverPadding(
                             padding: EdgeInsets.fromLTRB(
@@ -135,6 +154,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                     style: TextStyle(fontSize: 16, height: 1.5),
                                   ),
                                   const SizedBox(height: 24),
+                                  CatalogSearchField(onChanged: _changeQuery),
+                                  const SizedBox(height: 20),
                                   Semantics(
                                     liveRegion: true,
                                     child: Text(
@@ -191,7 +212,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                               child: CatalogMessage(
                                 message:
                                     state.errorMessage ??
-                                    'There are no products to display right now.',
+                                    (state.query.isEmpty
+                                        ? 'There are no products to display right now.'
+                                        : 'Try another product name or clear your search.'),
                                 onRetry: state.status == CatalogStatus.failure
                                     ? () => context.read<CatalogBloc>().add(
                                         const CatalogLoadRequested(),
