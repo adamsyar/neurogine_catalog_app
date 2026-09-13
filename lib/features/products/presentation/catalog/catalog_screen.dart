@@ -3,6 +3,11 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import '../../data/product.dart';
+import '../../data/product_api_client.dart';
+import '../detail/bloc/product_detail_bloc.dart';
+import '../detail/bloc/product_detail_load_requested.dart';
+import '../detail/product_detail_screen.dart';
 import '../widgets/product_card.dart';
 import 'bloc/catalog_bloc.dart';
 import 'bloc/catalog_load_requested.dart';
@@ -66,6 +71,20 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (changed && _scrollController.hasClients) {
       _scrollController.jumpTo(0);
     }
+  }
+
+  void _openProduct(Product product) {
+    final apiClient = context.read<ProductApiClient>();
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => BlocProvider(
+          create: (_) =>
+              ProductDetailBloc(productId: product.id, apiClient: apiClient)
+                ..add(const ProductDetailLoadRequested()),
+          child: const ProductDetailScreen(),
+        ),
+      ),
+    );
   }
 
   @override
@@ -221,6 +240,9 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                             ),
                                             product: state.products[index],
                                             imageHeight: imageHeight,
+                                            onTap: () => _openProduct(
+                                              state.products[index],
+                                            ),
                                           ),
                                     childCount: loading
                                         ? 6
