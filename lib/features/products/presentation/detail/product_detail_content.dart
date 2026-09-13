@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../data/product.dart';
-import '../widgets/product_image.dart';
+import 'product_image_gallery.dart';
 
 class ProductDetailContent extends StatelessWidget {
   const ProductDetailContent({super.key, required this.product});
@@ -10,19 +10,12 @@ class ProductDetailContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imageUrl = product.images.isEmpty
-        ? product.thumbnail
-        : product.images.first;
-
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          AspectRatio(
-            aspectRatio: 1.2,
-            child: ProductImage(url: imageUrl, label: product.title),
-          ),
+          ProductImageGallery(product: product),
           const SizedBox(height: 28),
           Semantics(
             header: true,
