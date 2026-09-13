@@ -11,7 +11,9 @@ class CatalogState {
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
-      paginationError = null;
+      paginationError = null,
+      isRefreshing = false,
+      refreshError = null;
 
   const CatalogState.loading({this.query = ''})
     : status = CatalogStatus.loading,
@@ -20,7 +22,9 @@ class CatalogState {
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
-      paginationError = null;
+      paginationError = null,
+      isRefreshing = false,
+      refreshError = null;
 
   CatalogState.loaded(
     List<Product> products, {
@@ -31,7 +35,9 @@ class CatalogState {
        products = List.unmodifiable(products),
        errorMessage = null,
        isLoadingMore = false,
-       paginationError = null;
+       paginationError = null,
+       isRefreshing = false,
+       refreshError = null;
 
   const CatalogState.failure(String message, {this.query = ''})
     : status = CatalogStatus.failure,
@@ -40,7 +46,9 @@ class CatalogState {
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
-      paginationError = null;
+      paginationError = null,
+      isRefreshing = false,
+      refreshError = null;
 
   CatalogState.pagination(
     CatalogState previous, {
@@ -51,7 +59,22 @@ class CatalogState {
        products = previous.products,
        errorMessage = previous.errorMessage,
        nextSkip = previous.nextSkip,
-       hasMore = previous.hasMore;
+       hasMore = previous.hasMore,
+       isRefreshing = false,
+       refreshError = null;
+
+  CatalogState.refreshing(
+    CatalogState previous, {
+    this.isRefreshing = true,
+    this.refreshError,
+  }) : status = previous.status,
+       query = previous.query,
+       products = previous.products,
+       errorMessage = previous.errorMessage,
+       nextSkip = previous.nextSkip,
+       hasMore = previous.hasMore,
+       isLoadingMore = false,
+       paginationError = previous.paginationError;
 
   final CatalogStatus status;
   final String query;
@@ -61,4 +84,6 @@ class CatalogState {
   final bool hasMore;
   final bool isLoadingMore;
   final String? paginationError;
+  final bool isRefreshing;
+  final String? refreshError;
 }

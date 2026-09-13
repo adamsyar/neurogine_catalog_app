@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../../data/product_api_client.dart';
@@ -6,6 +8,7 @@ import 'catalog_event.dart';
 import 'catalog_load_requested.dart';
 import 'catalog_next_page_requested.dart';
 import 'catalog_query_changed.dart';
+import 'catalog_refresh_requested.dart';
 import 'catalog_state.dart';
 
 class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
@@ -14,12 +17,14 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     on<CatalogLoadRequested>(_onLoadRequested);
     on<CatalogNextPageRequested>(_onNextPageRequested);
     on<CatalogQueryChanged>(_onQueryChanged);
+    on<CatalogRefreshRequested>(_onRefreshRequested);
   }
 
   final ProductApiClient _apiClient;
   int _queryRevision = 0;
   String _query = '';
   bool _debouncing = false;
+  bool _refreshPending = false;
 
   void changeQuery(String input) {
     if (isClosed) return;
@@ -30,6 +35,30 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
     _queryRevision++;
     _debouncing = query.isNotEmpty;
     add(CatalogQueryChanged(query: query, revision: _queryRevision));
+  }
+
+  Future<void> refresh() {
+    if (isClosed ||
+        _debouncing ||
+        _refreshPending ||
+        state.query != _query ||
+        state.isLoadingMore ||
+        state.isRefreshing ||
+        (state.status != CatalogStatus.success &&
+            state.status != CatalogStatus.empty)) {
+      return Future.value();
+    }
+
+    _refreshPending = true;
+    final completer = Completer<void>();
+    add(
+      CatalogRefreshRequested(
+        query: _query,
+        revision: _queryRevision,
+        completer: completer,
+      ),
+    );
+    return completer.future;
   }
 
   Future<void> _onQueryChanged(
@@ -109,6 +138,7 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
         state.query != _query ||
         state.status != CatalogStatus.success ||
         state.isLoadingMore ||
+        state.isRefreshing ||
         !state.hasMore ||
         (state.paginationError != null && !event.retry)) {
       return;
@@ -155,6 +185,57 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
               'More products could not be loaded. Please try again.',
         ),
       );
+    }
+  }
+
+  Future<void> _onRefreshRequested(
+    CatalogRefreshRequested event,
+    Emitter<CatalogState> emit,
+  ) async {
+    try {
+      if (event.revision != _queryRevision || event.query != _query) return;
+
+      final previous = state;
+      emit(CatalogState.refreshing(previous));
+      try {
+        final page = await _apiClient.fetchProducts(query: event.query);
+        if (emit.isDone || event.revision != _queryRevision) return;
+
+        final seenIds = <int>{};
+        final products = page.products
+            .where((product) => seenIds.add(product.id))
+            .toList();
+        emit(
+          CatalogState.loaded(
+            products,
+            query: event.query,
+            nextSkip: page.nextSkip,
+            hasMore: page.hasMore,
+          ),
+        );
+      } on ProductApiException catch (error) {
+        if (emit.isDone || event.revision != _queryRevision) return;
+        emit(
+          CatalogState.refreshing(
+            previous,
+            isRefreshing: false,
+            refreshError: error.message,
+          ),
+        );
+      } on Exception catch (error, stackTrace) {
+        if (emit.isDone || event.revision != _queryRevision) return;
+        addError(error, stackTrace);
+        emit(
+          CatalogState.refreshing(
+            previous,
+            isRefreshing: false,
+            refreshError: 'Products could not be refreshed. Please try again.',
+          ),
+        );
+      }
+    } finally {
+      _refreshPending = false;
+      if (!event.completer.isCompleted) event.completer.complete();
     }
   }
 

@@ -43,6 +43,7 @@ class _CatalogScreenState extends State<CatalogScreen> {
     if (state.status == CatalogStatus.success &&
         state.hasMore &&
         !state.isLoadingMore &&
+        !state.isRefreshing &&
         state.paginationError == null &&
         _scrollController.position.extentAfter < 500) {
       bloc.add(const CatalogNextPageRequested());
@@ -93,148 +94,170 @@ class _CatalogScreenState extends State<CatalogScreen> {
                     scale.scale(16) * 2.8 +
                     scale.scale(20) * 1.3;
 
-                return BlocBuilder<CatalogBloc, CatalogState>(
+                return BlocConsumer<CatalogBloc, CatalogState>(
+                  listenWhen: (previous, current) =>
+                      previous.refreshError != current.refreshError &&
+                      current.refreshError != null,
+                  listener: (context, state) {
+                    ScaffoldMessenger.of(context)
+                      ..hideCurrentSnackBar()
+                      ..showSnackBar(
+                        SnackBar(content: Text(state.refreshError!)),
+                      );
+                  },
                   builder: (context, state) {
                     _scheduleLoadCheck();
                     final loading =
                         state.status == CatalogStatus.initial ||
                         state.status == CatalogStatus.loading;
-                    final message = switch (state.status) {
-                      CatalogStatus.initial || CatalogStatus.loading =>
-                        state.query.isEmpty
-                            ? 'Loading products…'
-                            : 'Searching for “${state.query}”…',
-                      CatalogStatus.success =>
-                        state.query.isEmpty
-                            ? '${state.products.length} products loaded'
-                            : '${state.products.length} results for “${state.query}”',
-                      CatalogStatus.empty =>
-                        state.query.isEmpty
-                            ? 'No products found'
-                            : 'No results for “${state.query}”',
-                      CatalogStatus.failure => 'Could not load products',
-                    };
+                    final message = state.isRefreshing
+                        ? state.query.isEmpty
+                              ? 'Refreshing products…'
+                              : 'Refreshing results for “${state.query}”…'
+                        : switch (state.status) {
+                            CatalogStatus.initial || CatalogStatus.loading =>
+                              state.query.isEmpty
+                                  ? 'Loading products…'
+                                  : 'Searching for “${state.query}”…',
+                            CatalogStatus.success =>
+                              state.query.isEmpty
+                                  ? '${state.products.length} products loaded'
+                                  : '${state.products.length} results for “${state.query}”',
+                            CatalogStatus.empty =>
+                              state.query.isEmpty
+                                  ? 'No products found'
+                                  : 'No results for “${state.query}”',
+                            CatalogStatus.failure => 'Could not load products',
+                          };
 
-                    return NotificationListener<ScrollMetricsNotification>(
-                      onNotification: (notification) {
-                        _scheduleLoadCheck();
-                        return false;
-                      },
-                      child: CustomScrollView(
-                        controller: _scrollController,
-                        keyboardDismissBehavior:
-                            ScrollViewKeyboardDismissBehavior.onDrag,
-                        slivers: [
-                          SliverPadding(
-                            padding: EdgeInsets.fromLTRB(
-                              padding,
-                              32,
-                              padding,
-                              24,
-                            ),
-                            sliver: SliverToBoxAdapter(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Semantics(
-                                    header: true,
-                                    child: const Text(
-                                      'Product Catalog',
-                                      style: TextStyle(
-                                        fontSize: 32,
-                                        height: 1.2,
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -0.8,
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 8),
-                                  const Text(
-                                    'Discover something for your everyday.',
-                                    style: TextStyle(fontSize: 16, height: 1.5),
-                                  ),
-                                  const SizedBox(height: 24),
-                                  CatalogSearchField(onChanged: _changeQuery),
-                                  const SizedBox(height: 20),
-                                  Semantics(
-                                    liveRegion: true,
-                                    child: Text(
-                                      message,
-                                      style: TextStyle(
-                                        color: Theme.of(
-                                          context,
-                                        ).colorScheme.primary,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          if (loading || state.status == CatalogStatus.success)
+                    return RefreshIndicator.adaptive(
+                      onRefresh: context.read<CatalogBloc>().refresh,
+                      child: NotificationListener<ScrollMetricsNotification>(
+                        onNotification: (notification) {
+                          _scheduleLoadCheck();
+                          return false;
+                        },
+                        child: CustomScrollView(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          keyboardDismissBehavior:
+                              ScrollViewKeyboardDismissBehavior.onDrag,
+                          slivers: [
                             SliverPadding(
                               padding: EdgeInsets.fromLTRB(
                                 padding,
-                                0,
-                                padding,
                                 32,
+                                padding,
+                                24,
                               ),
-                              sliver: SliverGrid(
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: columns,
-                                      crossAxisSpacing: 16,
-                                      mainAxisSpacing: 16,
-                                      mainAxisExtent: cardHeight,
-                                    ),
-                                delegate: SliverChildBuilderDelegate(
-                                  (context, index) => loading
-                                      ? CatalogLoadingCard(
-                                          imageHeight: imageHeight,
-                                        )
-                                      : ProductCard(
-                                          key: ValueKey(
-                                            state.products[index].id,
-                                          ),
-                                          product: state.products[index],
-                                          imageHeight: imageHeight,
+                              sliver: SliverToBoxAdapter(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Semantics(
+                                      header: true,
+                                      child: const Text(
+                                        'Product Catalog',
+                                        style: TextStyle(
+                                          fontSize: 32,
+                                          height: 1.2,
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -0.8,
                                         ),
-                                  childCount: loading
-                                      ? 6
-                                      : state.products.length,
-                                ),
-                              ),
-                            )
-                          else
-                            SliverFillRemaining(
-                              hasScrollBody: false,
-                              child: CatalogMessage(
-                                message:
-                                    state.errorMessage ??
-                                    (state.query.isEmpty
-                                        ? 'There are no products to display right now.'
-                                        : 'Try another product name or clear your search.'),
-                                onRetry: state.status == CatalogStatus.failure
-                                    ? () => context.read<CatalogBloc>().add(
-                                        const CatalogLoadRequested(),
-                                      )
-                                    : null,
-                              ),
-                            ),
-                          if (state.status == CatalogStatus.success)
-                            SliverToBoxAdapter(
-                              child: CatalogPaginationFooter(
-                                state: state,
-                                onLoadMore: () =>
-                                    context.read<CatalogBloc>().add(
-                                      CatalogNextPageRequested(
-                                        retry: state.paginationError != null,
                                       ),
                                     ),
+                                    const SizedBox(height: 8),
+                                    const Text(
+                                      'Discover something for your everyday.',
+                                      style: TextStyle(
+                                        fontSize: 16,
+                                        height: 1.5,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 24),
+                                    CatalogSearchField(onChanged: _changeQuery),
+                                    const SizedBox(height: 20),
+                                    Semantics(
+                                      liveRegion: true,
+                                      child: Text(
+                                        message,
+                                        style: TextStyle(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
-                        ],
+                            if (loading ||
+                                state.status == CatalogStatus.success)
+                              SliverPadding(
+                                padding: EdgeInsets.fromLTRB(
+                                  padding,
+                                  0,
+                                  padding,
+                                  32,
+                                ),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: columns,
+                                        crossAxisSpacing: 16,
+                                        mainAxisSpacing: 16,
+                                        mainAxisExtent: cardHeight,
+                                      ),
+                                  delegate: SliverChildBuilderDelegate(
+                                    (context, index) => loading
+                                        ? CatalogLoadingCard(
+                                            imageHeight: imageHeight,
+                                          )
+                                        : ProductCard(
+                                            key: ValueKey(
+                                              state.products[index].id,
+                                            ),
+                                            product: state.products[index],
+                                            imageHeight: imageHeight,
+                                          ),
+                                    childCount: loading
+                                        ? 6
+                                        : state.products.length,
+                                  ),
+                                ),
+                              )
+                            else
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: CatalogMessage(
+                                  message:
+                                      state.errorMessage ??
+                                      (state.query.isEmpty
+                                          ? 'There are no products to display right now.'
+                                          : 'Try another product name or clear your search.'),
+                                  onRetry: state.status == CatalogStatus.failure
+                                      ? () => context.read<CatalogBloc>().add(
+                                          const CatalogLoadRequested(),
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            if (state.status == CatalogStatus.success)
+                              SliverToBoxAdapter(
+                                child: CatalogPaginationFooter(
+                                  state: state,
+                                  onLoadMore: () =>
+                                      context.read<CatalogBloc>().add(
+                                        CatalogNextPageRequested(
+                                          retry: state.paginationError != null,
+                                        ),
+                                      ),
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
                     );
                   },
