@@ -111,6 +111,7 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
         CatalogState.loaded(
           products,
           query: query,
+          total: page.total,
           nextSkip: page.nextSkip,
           hasMore: page.hasMore,
         ),
@@ -168,6 +169,7 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
         CatalogState.loaded(
           products,
           query: previous.query,
+          total: page.total,
           nextSkip: page.nextSkip,
           hasMore: page.hasMore,
         ),
@@ -209,6 +211,7 @@ class CatalogBloc extends Bloc<CatalogEvent, CatalogState> {
           CatalogState.loaded(
             products,
             query: event.query,
+            total: page.total,
             nextSkip: page.nextSkip,
             hasMore: page.hasMore,
           ),

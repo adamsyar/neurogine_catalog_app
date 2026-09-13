@@ -32,9 +32,13 @@ class _CatalogSearchFieldState extends State<CatalogSearchField> {
       autocorrect: false,
       onSubmitted: (_) => FocusScope.of(context).unfocus(),
       decoration: InputDecoration(
-        labelText: 'Search products',
-        hintText: 'Try phone or furniture',
-        prefixIcon: const Icon(Icons.search),
+        hintText: 'Search products',
+        hintStyle: const TextStyle(fontSize: 18),
+        prefixIcon: const Padding(
+          padding: EdgeInsets.only(left: 6, right: 8),
+          child: Icon(Icons.search, size: 30),
+        ),
+        prefixIconConstraints: const BoxConstraints(minWidth: 56),
         suffixIcon: _controller.text.isEmpty
             ? null
             : IconButton(
@@ -47,16 +51,21 @@ class _CatalogSearchFieldState extends State<CatalogSearchField> {
               ),
         filled: true,
         fillColor: Colors.white,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(18),
+          borderSide: const BorderSide(color: Color(0xFF4D5850)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(18),
           borderSide: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant,
+            color: Theme.of(context).colorScheme.primary,
+            width: 2,
           ),
         ),
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
-          vertical: 16,
+          vertical: 20,
         ),
       ),
     );

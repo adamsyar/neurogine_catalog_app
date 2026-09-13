@@ -13,10 +13,10 @@ import 'bloc/catalog_bloc.dart';
 import 'bloc/catalog_load_requested.dart';
 import 'bloc/catalog_next_page_requested.dart';
 import 'bloc/catalog_state.dart';
+import 'catalog_header.dart';
 import 'catalog_loading_card.dart';
 import 'catalog_message.dart';
 import 'catalog_pagination_footer.dart';
-import 'catalog_search_field.dart';
 
 class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
@@ -100,18 +100,13 @@ class _CatalogScreenState extends State<CatalogScreen> {
                 final padding = constraints.maxWidth < 600 ? 20.0 : 32.0;
                 final width = math.max(1.0, constraints.maxWidth - padding * 2);
                 final scale = MediaQuery.textScalerOf(context);
-                final minimumCardWidth = math.max(240.0, scale.scale(160));
-                final columns = (width / minimumCardWidth).floor().clamp(1, 4);
-                final cardWidth = (width - (columns - 1) * 16) / columns;
-                final imageHeight = math.min(
-                  200.0,
-                  math.max(80.0, cardWidth - 32),
+                final minimumCardWidth = math.max(360.0, scale.scale(240));
+                final columns = (width / minimumCardWidth).floor().clamp(1, 3);
+                final imageSize = constraints.maxWidth < 600 ? 112.0 : 120.0;
+                final cardHeight = math.max(
+                  imageSize + 24,
+                  scale.scale(17) * 2.7 + scale.scale(19) * 1.3 + 60,
                 );
-                final cardHeight =
-                    imageHeight +
-                    64 +
-                    scale.scale(16) * 2.8 +
-                    scale.scale(20) * 1.3;
 
                 return BlocConsumer<CatalogBloc, CatalogState>(
                   listenWhen: (previous, current) =>
@@ -140,8 +135,8 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   : 'Searching for “${state.query}”…',
                             CatalogStatus.success =>
                               state.query.isEmpty
-                                  ? '${state.products.length} products loaded'
-                                  : '${state.products.length} results for “${state.query}”',
+                                  ? '${state.total} products · ${state.products.length} loaded'
+                                  : '${state.total} results · ${state.products.length} loaded',
                             CatalogStatus.empty =>
                               state.query.isEmpty
                                   ? 'No products found'
@@ -165,50 +160,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                             SliverPadding(
                               padding: EdgeInsets.fromLTRB(
                                 padding,
-                                32,
+                                28,
                                 padding,
-                                24,
+                                28,
                               ),
                               sliver: SliverToBoxAdapter(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Semantics(
-                                      header: true,
-                                      child: const Text(
-                                        'Product Catalog',
-                                        style: TextStyle(
-                                          fontSize: 32,
-                                          height: 1.2,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: -0.8,
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    const Text(
-                                      'Discover something for your everyday.',
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        height: 1.5,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 24),
-                                    CatalogSearchField(onChanged: _changeQuery),
-                                    const SizedBox(height: 20),
-                                    Semantics(
-                                      liveRegion: true,
-                                      child: Text(
-                                        message,
-                                        style: TextStyle(
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                                child: CatalogHeader(
+                                  message: message,
+                                  onSearchChanged: _changeQuery,
                                 ),
                               ),
                             ),
@@ -232,14 +191,14 @@ class _CatalogScreenState extends State<CatalogScreen> {
                                   delegate: SliverChildBuilderDelegate(
                                     (context, index) => loading
                                         ? CatalogLoadingCard(
-                                            imageHeight: imageHeight,
+                                            imageSize: imageSize,
                                           )
                                         : ProductCard(
                                             key: ValueKey(
                                               state.products[index].id,
                                             ),
                                             product: state.products[index],
-                                            imageHeight: imageHeight,
+                                            imageSize: imageSize,
                                             onTap: () => _openProduct(
                                               state.products[index],
                                             ),

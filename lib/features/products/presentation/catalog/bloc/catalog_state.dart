@@ -8,6 +8,7 @@ class CatalogState {
       query = '',
       products = const [],
       errorMessage = null,
+      total = 0,
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
@@ -19,6 +20,7 @@ class CatalogState {
     : status = CatalogStatus.loading,
       products = const [],
       errorMessage = null,
+      total = 0,
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
@@ -29,6 +31,7 @@ class CatalogState {
   CatalogState.loaded(
     List<Product> products, {
     required this.query,
+    required this.total,
     required this.nextSkip,
     required this.hasMore,
   }) : status = products.isEmpty ? CatalogStatus.empty : CatalogStatus.success,
@@ -43,6 +46,7 @@ class CatalogState {
     : status = CatalogStatus.failure,
       products = const [],
       errorMessage = message,
+      total = 0,
       nextSkip = 0,
       hasMore = false,
       isLoadingMore = false,
@@ -58,6 +62,7 @@ class CatalogState {
        query = previous.query,
        products = previous.products,
        errorMessage = previous.errorMessage,
+       total = previous.total,
        nextSkip = previous.nextSkip,
        hasMore = previous.hasMore,
        isRefreshing = false,
@@ -71,6 +76,7 @@ class CatalogState {
        query = previous.query,
        products = previous.products,
        errorMessage = previous.errorMessage,
+       total = previous.total,
        nextSkip = previous.nextSkip,
        hasMore = previous.hasMore,
        isLoadingMore = false,
@@ -80,6 +86,7 @@ class CatalogState {
   final String query;
   final List<Product> products;
   final String? errorMessage;
+  final int total;
   final int nextSkip;
   final bool hasMore;
   final bool isLoadingMore;
