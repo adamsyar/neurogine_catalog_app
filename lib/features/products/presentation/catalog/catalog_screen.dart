@@ -6,12 +6,56 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../widgets/product_card.dart';
 import 'bloc/catalog_bloc.dart';
 import 'bloc/catalog_load_requested.dart';
+import 'bloc/catalog_next_page_requested.dart';
 import 'bloc/catalog_state.dart';
 import 'catalog_loading_card.dart';
 import 'catalog_message.dart';
+import 'catalog_pagination_footer.dart';
 
-class CatalogScreen extends StatelessWidget {
+class CatalogScreen extends StatefulWidget {
   const CatalogScreen({super.key});
+
+  @override
+  State<CatalogScreen> createState() => _CatalogScreenState();
+}
+
+class _CatalogScreenState extends State<CatalogScreen> {
+  final _scrollController = ScrollController();
+  bool _loadCheckScheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_loadMoreIfNeeded);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _loadMoreIfNeeded() {
+    if (!mounted || !_scrollController.hasClients) return;
+    final bloc = context.read<CatalogBloc>();
+    final state = bloc.state;
+    if (state.status == CatalogStatus.success &&
+        state.hasMore &&
+        !state.isLoadingMore &&
+        state.paginationError == null &&
+        _scrollController.position.extentAfter < 500) {
+      bloc.add(const CatalogNextPageRequested());
+    }
+  }
+
+  void _scheduleLoadCheck() {
+    if (_loadCheckScheduled) return;
+    _loadCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadCheckScheduled = false;
+      _loadMoreIfNeeded();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,6 +85,7 @@ class CatalogScreen extends StatelessWidget {
 
                 return BlocBuilder<CatalogBloc, CatalogState>(
                   builder: (context, state) {
+                    _scheduleLoadCheck();
                     final loading =
                         state.status == CatalogStatus.initial ||
                         state.status == CatalogStatus.loading;
@@ -53,98 +98,121 @@ class CatalogScreen extends StatelessWidget {
                       CatalogStatus.failure => 'Could not load products',
                     };
 
-                    return CustomScrollView(
-                      slivers: [
-                        SliverPadding(
-                          padding: EdgeInsets.fromLTRB(
-                            padding,
-                            32,
-                            padding,
-                            24,
-                          ),
-                          sliver: SliverToBoxAdapter(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Semantics(
-                                  header: true,
-                                  child: const Text(
-                                    'Product Catalog',
-                                    style: TextStyle(
-                                      fontSize: 32,
-                                      height: 1.2,
-                                      fontWeight: FontWeight.w700,
-                                      letterSpacing: -0.8,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(height: 8),
-                                const Text(
-                                  'Discover something for your everyday.',
-                                  style: TextStyle(fontSize: 16, height: 1.5),
-                                ),
-                                const SizedBox(height: 24),
-                                Semantics(
-                                  liveRegion: true,
-                                  child: Text(
-                                    message,
-                                    style: TextStyle(
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        if (loading || state.status == CatalogStatus.success)
+                    return NotificationListener<ScrollMetricsNotification>(
+                      onNotification: (notification) {
+                        _scheduleLoadCheck();
+                        return false;
+                      },
+                      child: CustomScrollView(
+                        controller: _scrollController,
+                        slivers: [
                           SliverPadding(
                             padding: EdgeInsets.fromLTRB(
                               padding,
-                              0,
-                              padding,
                               32,
+                              padding,
+                              24,
                             ),
-                            sliver: SliverGrid(
-                              gridDelegate:
-                                  SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: columns,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16,
-                                    mainAxisExtent: cardHeight,
-                                  ),
-                              delegate: SliverChildBuilderDelegate(
-                                (context, index) => loading
-                                    ? CatalogLoadingCard(
-                                        imageHeight: imageHeight,
-                                      )
-                                    : ProductCard(
-                                        key: ValueKey(state.products[index].id),
-                                        product: state.products[index],
-                                        imageHeight: imageHeight,
+                            sliver: SliverToBoxAdapter(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Semantics(
+                                    header: true,
+                                    child: const Text(
+                                      'Product Catalog',
+                                      style: TextStyle(
+                                        fontSize: 32,
+                                        height: 1.2,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -0.8,
                                       ),
-                                childCount: loading ? 6 : state.products.length,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  const Text(
+                                    'Discover something for your everyday.',
+                                    style: TextStyle(fontSize: 16, height: 1.5),
+                                  ),
+                                  const SizedBox(height: 24),
+                                  Semantics(
+                                    liveRegion: true,
+                                    child: Text(
+                                      message,
+                                      style: TextStyle(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.primary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          )
-                        else
-                          SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: CatalogMessage(
-                              message:
-                                  state.errorMessage ??
-                                  'There are no products to display right now.',
-                              onRetry: state.status == CatalogStatus.failure
-                                  ? () => context.read<CatalogBloc>().add(
-                                      const CatalogLoadRequested(),
-                                    )
-                                  : null,
-                            ),
                           ),
-                      ],
+                          if (loading || state.status == CatalogStatus.success)
+                            SliverPadding(
+                              padding: EdgeInsets.fromLTRB(
+                                padding,
+                                0,
+                                padding,
+                                32,
+                              ),
+                              sliver: SliverGrid(
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: columns,
+                                      crossAxisSpacing: 16,
+                                      mainAxisSpacing: 16,
+                                      mainAxisExtent: cardHeight,
+                                    ),
+                                delegate: SliverChildBuilderDelegate(
+                                  (context, index) => loading
+                                      ? CatalogLoadingCard(
+                                          imageHeight: imageHeight,
+                                        )
+                                      : ProductCard(
+                                          key: ValueKey(
+                                            state.products[index].id,
+                                          ),
+                                          product: state.products[index],
+                                          imageHeight: imageHeight,
+                                        ),
+                                  childCount: loading
+                                      ? 6
+                                      : state.products.length,
+                                ),
+                              ),
+                            )
+                          else
+                            SliverFillRemaining(
+                              hasScrollBody: false,
+                              child: CatalogMessage(
+                                message:
+                                    state.errorMessage ??
+                                    'There are no products to display right now.',
+                                onRetry: state.status == CatalogStatus.failure
+                                    ? () => context.read<CatalogBloc>().add(
+                                        const CatalogLoadRequested(),
+                                      )
+                                    : null,
+                              ),
+                            ),
+                          if (state.status == CatalogStatus.success)
+                            SliverToBoxAdapter(
+                              child: CatalogPaginationFooter(
+                                state: state,
+                                onLoadMore: () =>
+                                    context.read<CatalogBloc>().add(
+                                      CatalogNextPageRequested(
+                                        retry: state.paginationError != null,
+                                      ),
+                                    ),
+                              ),
+                            ),
+                        ],
+                      ),
                     );
                   },
                 );
